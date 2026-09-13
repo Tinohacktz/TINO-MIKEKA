@@ -1,0 +1,15 @@
+{
+  "name": "Utabiri wa Mechi",
+  "short_name": "Utabiri",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#101B13",
+  "theme_color": "#101B13",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
