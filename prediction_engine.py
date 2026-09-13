@@ -71,6 +71,21 @@ def home_away_score(home_win_rate_at_home: float, away_win_rate_away: float) -> 
     return home_win_rate_at_home / total
 
 
+def strength_from_standing(row: dict | None) -> float:
+    """Fallback signal using overall points-per-game when a competition
+    doesn't provide a 'form' string or HOME/AWAY split (common on some
+    leagues, e.g. Brasileirão on the free tier). Returns 0-1, where 0.5
+    is an average team (roughly 1.3 pts/game)."""
+    if not row:
+        return 0.5
+    played = row.get("playedGames", 0)
+    points = row.get("points", 0)
+    if played == 0:
+        return 0.5
+    ppg = points / played  # 0 to 3
+    return max(0.0, min(1.0, ppg / 3))
+
+
 def goals_score(home_gf: float, home_ga: float, away_gf: float, away_ga: float) -> float:
     """Compare goal-scoring balance (goals for minus against) between the two sides."""
     home_diff = home_gf - home_ga
