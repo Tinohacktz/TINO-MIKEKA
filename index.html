@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Utabiri wa Mechi</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#101B13" />
+<style>
+  :root {
+    --bg: #101B13;
+    --card: #182A1D;
+    --border: #25392A;
+    --gold: #C9A227;
+    --green: #5B8C5A;
+    --rust: #B5543A;
+    --text: #EDE8DC;
+    --muted: #8FA091;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Inter", ui-sans-serif, system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  #app { max-width: 420px; margin: 0 auto; padding: 24px 16px 40px; }
+  .eyebrow { color: var(--gold); font-size: 12px; letter-spacing: 0.05em; }
+  h1 { font-size: 22px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+  }
+  .row { display: flex; justify-content: space-between; align-items: center; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .teams { font-weight: 600; margin-top: 6px; }
+  .pill {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0C140E; border-radius: 10px; padding: 8px 12px; margin-top: 12px;
+  }
+  .pill .pct { color: var(--gold); font-weight: 700; }
+  .bar-wrap { margin-bottom: 10px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .bar-bg { background: #0C140E; border-radius: 6px; height: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; }
+  .factor { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .factor:last-child { border-bottom: none; }
+  .factor-icon {
+    width: 32px; height: 32px; border-radius: 8px; background: #0C140E;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px;
+  }
+  .back { color: var(--muted); background: none; border: none; font-size: 14px; padding: 0; margin-bottom: 16px; cursor: pointer; }
+  .center { text-align: center; }
+  .disclaimer { display: flex; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 14px; padding: 0 4px; line-height: 1.4; }
+  .loading, .error { text-align: center; color: var(--muted); padding: 40px 0; font-size: 14px; }
+  button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Inapakia mechi za leo…</div></div>
+
+<script>
+const API_URL = "https://tino-mikeka.onrender.com/fixtures/today";
+const app = document.getElementById("app");
+let matches = [];
+
+function factorLabel(key) {
+  return { form: "Fomu / nafasi ya ligi", head_to_head: "Historia ya ana kwa ana",
+    home_away: "Nyumbani / ugenini", goals: "Magoli kufunga/kupokea" }[key];
+}
+function factorIcon(key) {
+  return { form: "📈", head_to_head: "⚔️", home_away: "🏠", goals: "🥅" }[key];
+}
+function factorNote(key, value) {
+  const pct = Math.round(value * 100);
+  if (pct >= 60) return "Inampendelea timu ya nyumbani kwa kiasi kikubwa.";
+  if (pct <= 40) return "Inampendelea timu ya ugenini kwa kiasi kikubwa.";
+  return "Karibu sawa kati ya timu zote mbili.";
+}
+
+async function load() {
+  try {
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error("Server error " + res.status);
+    const data = await res.json();
+    matches = data.matches || [];
+    renderList();
+  } catch (e) {
+    app.innerHTML = '<div class="error">Imeshindwa kupakia data.<br>Backend inaweza kuwa "inaamka" (subiri sekunde 30 kisha jaribu tena).<br><br>' + e.message + '</div>';
+  }
+}
+
+function renderList() {
+  if (matches.length === 0) {
+    app.innerHTML = '<div class="eyebrow">LEO</div><h1>Utabiri wa Leo</h1><p class="sub">Hakuna mechi za ligi kuu leo.</p>';
+    return;
+  }
+  let html = '<div class="eyebrow">LEO</div><h1>Utabiri wa Leo</h1><p class="sub">Uchambuzi wa timu kabla ya mechi</p>';
+  matches.forEach((m, i) => {
+    const p = m.probabilities;
+    const lead = p.home_win_pct >= p.away_win_pct && p.home_win_pct >= p.draw_pct ? "home"
+               : p.away_win_pct >= p.draw_pct ? "away" : "draw";
+    const leadLabel = lead === "home" ? m.home_team : lead === "away" ? m.away_team : "Sare";
+    const leadPct = lead === "home" ? p.home_win_pct : lead === "away" ? p.away_win_pct : p.draw_pct;
+    html += `
+      <div class="card" onclick="renderDetail(${i})">
+        <div class="row"><span class="meta">${m.competition}</span></div>
+        <div class="row teams"><span>${m.home_team}</span><span class="meta">dhidi ya</span><span>${m.away_team}</span></div>
+        <div class="pill"><span>📈 Utabiri: <b>${leadLabel}</b></span><span class="pct">${leadPct}%</span></div>
+      </div>`;
+  });
+  app.innerHTML = html;
+}
+
+function renderDetail(i) {
+  const m = matches[i];
+  const p = m.probabilities;
+  let bars = ["home_win_pct", "draw_pct", "away_win_pct"].map((k, idx) => {
+    const labels = [m.home_team, "Sare", m.away_team];
+    const colors = ["var(--gold)", "var(--muted)", "var(--rust)"];
+    return `<div class="bar-wrap">
+      <div class="bar-label"><span>${labels[idx]}</span><span style="color:var(--text);font-weight:600">${p[k]}%</span></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${p[k]}%;background:${colors[idx]}"></div></div>
+    </div>`;
+  }).join("");
+
+  let factors = Object.entries(m.factors).map(([k, v]) => `
+    <div class="factor">
+      <div class="factor-icon">${factorIcon(k)}</div>
+      <div style="flex:1">
+        <div class="row"><span style="font-size:14px;font-weight:500">${factorLabel(k)}</span><span class="meta">${Math.round(v*100)}</span></div>
+        <p style="font-size:12px;color:var(--muted);margin:4px 0 0">${factorNote(k, v)}</p>
+      </div>
+    </div>`).join("");
+
+  app.innerHTML = `
+    <button class="back" onclick="renderList()">← Rudi</button>
+    <p class="center meta">${m.competition}</p>
+    <div class="row" style="justify-content:center;gap:16px;margin:8px 0 20px">
+      <span style="font-weight:700;width:110px;text-align:center">${m.home_team}</span>
+      <span style="color:var(--gold);font-size:12px">VS</span>
+      <span style="font-weight:700;width:110px;text-align:center">${m.away_team}</span>
+    </div>
+    <div class="card" style="cursor:default">
+      <div style="font-weight:500;margin-bottom:12px">Uwezekano wa matokeo</div>
+      ${bars}
+    </div>
+    <div class="card" style="cursor:default">
+      <div style="font-weight:500;margin-bottom:4px">Uchambuzi wa kina</div>
+      ${factors}
+    </div>
+    <div class="disclaimer">⚠️ Hii ni tathmini ya takwimu, si uhakika. Betting ina hatari ya kifedha — weka kiwango unachomudu kupoteza.</div>
+  `;
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+load();
+</script>
+</body>
+</html>
