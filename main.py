@@ -31,6 +31,7 @@ from prediction_engine import (
     head_to_head_score,
     home_away_score,
     goals_score,
+    strength_from_standing,
 )
 
 import time
@@ -125,11 +126,18 @@ def build_prediction(match: dict) -> dict:
     h2h = get_head2head(match["id"])
 
     form_score = form_string_to_score(home_row.get("form") if home_row else None)
+    if home_row and not home_row.get("form"):
+        form_score = strength_from_standing(home_row)
     h2h_score = head_to_head_score(h2h["home_wins"], h2h["draws"], h2h["away_wins"])
 
-    home_win_rate_home = (home_row_home.get("won", 0) / home_row_home.get("playedGames", 1)) if home_row_home else 0.5
-    away_win_rate_away = (away_row_away.get("won", 0) / away_row_away.get("playedGames", 1)) if away_row_away else 0.5
-    ha_score = home_away_score(home_win_rate_home, away_win_rate_away)
+    if home_row_home and away_row_away:
+        home_win_rate_home = home_row_home.get("won", 0) / max(1, home_row_home.get("playedGames", 1))
+        away_win_rate_away = away_row_away.get("won", 0) / max(1, away_row_away.get("playedGames", 1))
+        ha_score = home_away_score(home_win_rate_home, away_win_rate_away)
+    else:
+        # Fallback: no HOME/AWAY split available for this competition —
+        # compare overall season strength instead.
+        ha_score = home_away_score(strength_from_standing(home_row), strength_from_standing(away_row))
 
     home_gf = home_row.get("goalsFor", 0) / max(1, home_row.get("playedGames", 1)) if home_row else 1.2
     home_ga = home_row.get("goalsAgainst", 0) / max(1, home_row.get("playedGames", 1)) if home_row else 1.2
