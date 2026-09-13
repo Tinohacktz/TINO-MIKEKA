@@ -153,6 +153,13 @@ def build_prediction(match: dict) -> dict:
             "home_away": round(ha_score, 2),
             "goals": round(g_score, 2),
         },
+        "debug": {
+            "home_row_found": home_row is not None,
+            "away_row_found": away_row is not None,
+            "home_row_home_found": home_row_home is not None,
+            "away_row_away_found": away_row_away is not None,
+            "h2h_matches_seen": h2h["home_wins"] + h2h["draws"] + h2h["away_wins"],
+        },
     }
 
 
@@ -165,14 +172,26 @@ def health():
 def fixtures_today():
     fixtures = get_today_fixtures()
     predictions = []
+    skipped = []
     for match in fixtures:
         try:
             predictions.append(build_prediction(match))
-        except HTTPException:
-            raise
-        except Exception:
-            # Skip a single match if its standings/h2h data isn't available
-            # (e.g. cup competitions without a league table) rather than
-            # failing the whole endpoint.
-            continue
-    return {"date": date.today().isoformat(), "count": len(predictions), "matches": predictions}
+        except HTTPException as e:
+            skipped.append({
+                "home_team": match.get("homeTeam", {}).get("name"),
+                "away_team": match.get("awayTeam", {}).get("name"),
+                "reason": e.detail,
+            })
+        except Exception as e:
+            skipped.append({
+                "home_team": match.get("homeTeam", {}).get("name"),
+                "away_team": match.get("awayTeam", {}).get("name"),
+                "reason": f"{type(e).__name__}: {e}",
+            })
+    return {
+        "date": date.today().isoformat(),
+        "total_fixtures_today": len(fixtures),
+        "count": len(predictions),
+        "matches": predictions,
+        "skipped": skipped,
+    }
