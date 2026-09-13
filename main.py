@@ -33,8 +33,16 @@ from prediction_engine import (
     goals_score,
 )
 
+import time
+
 API_KEY = os.environ.get("FOOTBALL_DATA_API_KEY", "")
 BASE_URL = "https://api.football-data.org/v4"
+
+# Simple in-memory cache: competition_id -> (timestamp, standings_json)
+# Standings don't change minute-to-minute, so reusing this across matches
+# in the same competition/request cuts API calls drastically.
+_standings_cache: dict = {}
+_CACHE_TTL_SECONDS = 300
 
 app = FastAPI(title="Football Prediction API")
 
@@ -71,23 +79,22 @@ def get_today_fixtures() -> list:
     return data.get("matches", [])
 
 
-def get_team_standing(competition_id: int, team_id: int) -> dict | None:
-    """Pull a team's row from the competition's standings (TOTAL table)."""
+def get_standings_cached(competition_id: int) -> dict:
+    """Fetch standings for a competition once, reusing across all matches
+    in that competition for _CACHE_TTL_SECONDS instead of re-requesting."""
+    cached = _standings_cache.get(competition_id)
+    if cached and (time.time() - cached[0] < _CACHE_TTL_SECONDS):
+        return cached[1]
     data = fd_get(f"/competitions/{competition_id}/standings")
-    for table in data.get("standings", []):
-        if table.get("type") != "TOTAL":
-            continue
-        for row in table.get("table", []):
-            if row.get("team", {}).get("id") == team_id:
-                return row
-    return None
+    _standings_cache[competition_id] = (time.time(), data)
+    return data
 
 
-def get_home_away_standing(competition_id: int, team_id: int, kind: str) -> dict | None:
-    """kind is 'HOME' or 'AWAY'."""
-    data = fd_get(f"/competitions/{competition_id}/standings")
-    for table in data.get("standings", []):
-        if table.get("type") != kind:
+def find_row(standings_data: dict, team_id: int, table_type: str) -> dict | None:
+    """table_type is 'TOTAL', 'HOME', or 'AWAY' — all are already present
+    in a single standings response, no extra API call needed."""
+    for table in standings_data.get("standings", []):
+        if table.get("type") != table_type:
             continue
         for row in table.get("table", []):
             if row.get("team", {}).get("id") == team_id:
@@ -110,10 +117,11 @@ def build_prediction(match: dict) -> dict:
     home_team = match["homeTeam"]
     away_team = match["awayTeam"]
 
-    home_row = get_team_standing(competition_id, home_team["id"])
-    away_row = get_team_standing(competition_id, away_team["id"])
-    home_row_home = get_home_away_standing(competition_id, home_team["id"], "HOME")
-    away_row_away = get_home_away_standing(competition_id, away_team["id"], "AWAY")
+    standings_data = get_standings_cached(competition_id)
+    home_row = find_row(standings_data, home_team["id"], "TOTAL")
+    away_row = find_row(standings_data, away_team["id"], "TOTAL")
+    home_row_home = find_row(standings_data, home_team["id"], "HOME")
+    away_row_away = find_row(standings_data, away_team["id"], "AWAY")
     h2h = get_head2head(match["id"])
 
     form_score = form_string_to_score(home_row.get("form") if home_row else None)
